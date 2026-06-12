@@ -4,6 +4,7 @@ import { restartAgentGroupContainers } from '../../container-restart.js';
 import { getSession } from '../../db/sessions.js';
 import { writeSessionMessage } from '../../session-manager.js';
 import {
+  createContainerConfig,
   getContainerConfig,
   updateContainerConfigScalars,
   updateContainerConfigJson,
@@ -57,6 +58,31 @@ registerResource({
     { name: 'created_at', type: 'string', description: 'Auto-set.', generated: true },
   ],
   operations: { list: 'open', get: 'open', create: 'approval', update: 'approval', delete: 'approval' },
+  // Seed the matching container_configs row so wakeContainer can spawn
+  // immediately. Mirrors backfill-container-configs.ts defaults — used to
+  // require a host restart for the backfill to catch up. assistant_name
+  // is set from the agent group's display name so new agents don't all
+  // identify as the global ASSISTANT_NAME env var.
+  afterCreate: (row) => {
+    const agentGroupId = row.id as string;
+    const name = (row.name as string | undefined) ?? null;
+    createContainerConfig({
+      agent_group_id: agentGroupId,
+      provider: null,
+      model: null,
+      effort: null,
+      image_tag: null,
+      assistant_name: name,
+      max_messages_per_prompt: null,
+      skills: JSON.stringify('all'),
+      mcp_servers: JSON.stringify({}),
+      packages_apt: JSON.stringify([]),
+      packages_npm: JSON.stringify([]),
+      additional_mounts: JSON.stringify([]),
+      cli_scope: 'group',
+      updated_at: new Date().toISOString(),
+    });
+  },
   customOperations: {
     restart: {
       access: 'approval',
